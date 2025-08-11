@@ -16,14 +16,16 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// RTMS webhook handler
-rtms.onWebhookEvent(async ({ event, payload }) => {
-  const streamId = payload?.rtms_stream_id;
-  const meetingUuid = payload?.meeting_uuid;
-
-  logger.info(`Received webhook event: ${event}`, { streamId, meetingUuid });
-
+app.post("/webhook", async (req, res) => {
   try {
+    const { event, payload } = req.body;
+    console.log("payload post webhook -> ", payload);
+
+    const streamId = payload?.rtms_stream_id;
+    const meetingUuid = payload?.meeting_uuid;
+
+    logger.info(`Received webhook event: ${event}`, { streamId, meetingUuid });
+
     if (event === "meeting.rtms_stopped") {
       await handleMeetingStopped(streamId, meetingUuid);
     } else if (event === "meeting.rtms_started") {
@@ -31,10 +33,40 @@ rtms.onWebhookEvent(async ({ event, payload }) => {
     } else {
       logger.debug(`Ignoring unknown event: ${event}`);
     }
+
+    res.status(200).json({ success: true });
   } catch (error) {
-    logger.error(`Error handling webhook event ${event}:`, error);
+    logger.error(`Error handling webhook event:`, error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// RTMS webhook handler
+// rtms.onWebhookEvent(async ({ event, payload }) => {
+//   console.log("payload -> ", payload);
+//   //   payload ->  {
+//   //   meeting_uuid: 'phhcINXTR3moHaP0UVfDAw==',
+//   //   operator_id: 'Oam3T9DyQ9W2iXCLrk4Stg',
+//   //   rtms_stream_id: 'b82ee47aa8f144caa8fad459bde10c0f',
+//   //   server_urls: 'wss://zoomsjc144-195-19-86zssgw.sjc.zoom.us:443'
+//   // }
+//   const streamId = payload?.rtms_stream_id;
+//   const meetingUuid = payload?.meeting_uuid;
+
+//   logger.info(`Received webhook event: ${event}`, { streamId, meetingUuid });
+
+//   try {
+//     if (event === "meeting.rtms_stopped") {
+//       await handleMeetingStopped(streamId, meetingUuid);
+//     } else if (event === "meeting.rtms_started") {
+//       await handleMeetingStarted(streamId, payload);
+//     } else {
+//       logger.debug(`Ignoring unknown event: ${event}`);
+//     }
+//   } catch (error) {
+//     logger.error(`Error handling webhook event ${event}:`, error);
+//   }
+// });
 
 async function handleMeetingStopped(streamId, meetingUuid) {
   if (!streamId) {
@@ -115,24 +147,24 @@ function setupClientHandlers(client, streamId) {
     }
   });
 
-  // Video configuration (optional)
-  const videoParams = {
-    contentType: rtms.VideoContentType.RAW_VIDEO,
-    codec: rtms.VideoCodec.H264,
-    resolution: rtms.VideoResolution.SD,
-    dataOpt: rtms.VideoDataOption.VIDEO_SINGLE_ACTIVE_STREAM,
-    fps: 30,
-  };
+  // // Video configuration (optional)
+  // const videoParams = {
+  //   contentType: rtms.VideoContentType.RAW_VIDEO,
+  //   codec: rtms.VideoCodec.H264,
+  //   resolution: rtms.VideoResolution.SD,
+  //   dataOpt: rtms.VideoDataOption.VIDEO_SINGLE_ACTIVE_STREAM,
+  //   fps: 30,
+  // };
 
-  client.setVideoParams(videoParams);
-  client.onVideoData((data, size, timestamp, metadata) => {
-    // Video processing can be added here if needed
-  });
+  // client.setVideoParams(videoParams);
+  // client.onVideoData((data, size, timestamp, metadata) => {
+  //   // Video processing can be added here if needed
+  // });
 
-  client.setDeskshareParams(videoParams);
-  client.onDeskshareData((data, size, timestamp, metadata) => {
-    // Deskshare processing can be added here if needed
-  });
+  // client.setDeskshareParams(videoParams);
+  // client.onDeskshareData((data, size, timestamp, metadata) => {
+  //   // Deskshare processing can be added here if needed
+  // });
 }
 
 // Error handlers
