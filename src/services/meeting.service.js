@@ -36,11 +36,21 @@ class MeetingService {
         this.transcriptions.set(streamId, []);
       }
 
+      // Initialize meeting start time
+      if (!this.meetingStartTimes.has(streamId)) {
+        this.meetingStartTimes.set(streamId, Number(timestamp));
+      }
+
+      // Calculate relative time from meeting start
+      const startTime = this.meetingStartTimes.get(streamId);
+      const relativeStart = (Number(timestamp) - startTime) / 1000000;
+
       this.transcriptions.get(streamId).push({
-        timestamp: Number(timestamp),
+        userId: metadata.userId || null,
         speaker: metadata.userName || "Unknown",
         text: trimmedData,
-        userId: metadata.userId || null,
+        start: relativeStart,
+        end: relativeStart + 2,
       });
 
       logger.debug(
