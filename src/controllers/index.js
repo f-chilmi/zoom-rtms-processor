@@ -51,8 +51,8 @@ function handleUrlValidation(payload, res) {
     .update(payload.plainToken)
     .digest("hex");
 
-  console.log("Responding to Zoom URL validation challenge");
-  return res.json({
+  console.log("Responding to Zoom URL validation challenge", encryptedToken);
+  return res.status(200).json({
     plainToken: payload.plainToken,
     encryptedToken,
   });
