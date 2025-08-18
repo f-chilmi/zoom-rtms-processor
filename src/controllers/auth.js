@@ -136,7 +136,7 @@ export const install = (req, res) => {
   console.log("2. Redirect url to authenticate to Zoom:", redirectUrl, "\n");
 
   // 3. Redirect to url - the user can authenticate and authorize the app scopes securely on zoom.us
-  console.log(`3. Redirecting to redirect url ${redirectUrl}`, "\n");
+  console.log("3. Redirecting to redirect url", "\n");
   res.redirect(redirectUrl);
 };
 
@@ -279,9 +279,8 @@ export const home = (req, res, next) => {
   }
 
   // 4. Redirect to frontend
-  const urlFE = "/zoomapp/proxy";
-  console.log("4. Redirect to frontend", urlFE, "\n");
-  res.redirect(urlFE);
+  console.log("4. Redirect to frontend", "\n");
+  res.redirect("/zoomapp/proxy");
 };
 
 // FRONTEND PROXY ===========================================================
@@ -316,16 +315,15 @@ export const home = (req, res, next) => {
 //   },
 // });
 export const proxy = createProxyMiddleware({
-  target: process.env.ZOOM_APP_CLIENT_URL,
+  target: process.env.ZOOM_APP_CLIENT_URL, // Back to root
   changeOrigin: true,
   ws: true,
-  // pathRewrite: {
-  //   "^/zoomapp/proxy": "/zoomapp", // Rewrite to /zoomapp
-  //   "^/zoomapp/proxy/": "/zoomapp/", // Handle trailing slash
-  // },
+  pathRewrite: {
+    "^/zoomapp/proxy": "/zoomapp", // Rewrite /proxy to /zoomapp
+    "^/zoomapp/_next": "/_next", // Preserve Next.js static paths
+  },
   onProxyReq: (proxyReq, req, res) => {
     console.log(
-      328,
       `Proxying to frontend: ${req.method} ${req.originalUrl} -> ${proxyReq.path}`
     );
 
@@ -348,18 +346,12 @@ export const proxy = createProxyMiddleware({
     proxyReq.setHeader("X-Zoom-App", "true");
   },
   onProxyRes: (proxyRes, req, res) => {
-    console.log(350, proxyRes);
-    // Add security headers
-    proxyRes.headers["Strict-Transport-Security"] =
-      "max-age=31536000; includeSubDomains";
-    proxyRes.headers["X-Content-Type-Options"] = "nosniff";
-    proxyRes.headers["Content-Security-Policy"] =
-      "default-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:";
-    proxyRes.headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
-    proxyRes.headers["X-Frame-Options"] = "SAMEORIGIN";
+    console.log(
+      `Frontend response: ${proxyRes.statusCode} for ${req.originalUrl}`
+    );
   },
   onError: (err, req, res) => {
-    console.error(362, "Proxy error:", err);
+    console.error("Proxy error:", err);
     res.status(500).send("Proxy error occurred");
   },
 });

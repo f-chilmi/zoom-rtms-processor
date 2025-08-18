@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zoom RTMS App</title>
+    <script src="https://appssdk.zoom.us/sdk.js"></script>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f8f9fa;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #2563eb;
+        margin-bottom: 10px;
+      }
+      .status {
+        background: #e3f2fd;
+        padding: 10px;
+        border-radius: 4px;
+        margin: 10px 0;
+        border-left: 4px solid #2196f3;
+      }
+      .button-group {
+        margin: 20px 0;
+      }
+      button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin: 5px;
+        font-size: 14px;
+        transition: background 0.2s;
+      }
+      button:hover {
+        background: #1d4ed8;
+      }
+      button:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+      .message {
+        background: #f3f4f6;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 10px 0;
+        word-wrap: break-word;
+      }
+      .error {
+        background: #fee2e2;
+        border-left: 4px solid #ef4444;
+        color: #dc2626;
+      }
+      .success {
+        background: #d1fae5;
+        border-left: 4px solid #10b981;
+        color: #047857;
+      }
+      .loading {
+        color: #6b7280;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 id="welcome">Hello Zoom Apps user!</h1>
+
+      <div class="status">
+        <p>
+          <strong>User Context Status:</strong>
+          <span id="userContextStatus">Loading...</span>
+        </p>
+        <p>
+          <strong>Running Context:</strong>
+          <span id="runningContext">Configuring Zoom JavaScript SDK...</span>
+        </p>
+      </div>
+
+      <div class="button-group">
+        <button id="startRTMS" onclick="handleStartRTMS()" disabled>
+          Start RTMS
+        </button>
+        <button id="stopRTMS" onclick="handleStopRTMS()" disabled>
+          Stop RTMS
+        </button>
+        <button id="authorize" onclick="handleAuthorize()" disabled>
+          Authorize
+        </button>
+      </div>
+
+      <div id="messages"></div>
+    </div>
+
+    <script>
+      // Global variables
+      let user = null;
+      let runningContext = null;
+      let connected = false;
+      let preMeeting = true;
+      let userContextStatus = "";
+      let once = 0;
+
+      // Initialize the app
+      async function initializeApp() {
+        try {
+          console.log("Initializing Zoom SDK...");
+
+          const configResponse = await zoomSdk.config({
+            capabilities: [
+              "authorize",
+              "onAuthorized",
+              "getUserContext",
+              "onMyUserContextChange",
+              "startRTMS",
+              "stopRTMS",
+              "connect",
+              "onConnect",
+              "postMessage",
+              "onMessage",
+              "onSendAppInvitation",
+              "onShareApp",
+              "onActiveSpeakerChange",
+              "onMeeting",
+            ],
+            version: "0.16.0",
+          });
+
+          console.log("App configured", configResponse);
+
+          runningContext = configResponse.runningContext;
+          userContextStatus = configResponse.auth.status;
+
+          updateUI();
+          enableButtons();
+
+          // Set up event listeners
+          setupEventListeners();
+
+          // Handle pre-meeting logic
+          handlePreMeeting();
+
+          addMessage("✅ Zoom SDK configured successfully", "success");
+        } catch (error) {
+          console.error("Error configuring SDK:", error);
+          addMessage(
+            "❌ Error configuring the Zoom SDK: " + error.message,
+            "error"
+          );
+        }
+      }
+
+      function setupEventListeners() {
+        zoomSdk.onSendAppInvitation((data) => {
+          console.log("onSendAppInvitation:", data);
+        });
+
+        zoomSdk.onShareApp((data) => {
+          console.log("onShareApp:", data);
+        });
+      }
+
+      function handlePreMeeting() {
+        if (runningContext === "inMainClient" && preMeeting === true) {
+          zoomSdk.addEventListener("onMessage", (message) => {
+            let content = message.payload.payload;
+            if (content === "connected" && preMeeting === true) {
+              console.log("Meeting instance exists.");
+              sendMessage(window.location.hash, "client");
+              preMeeting = false;
+            }
+          });
+        }
+
+        if (runningContext === "inMeeting") {
+          zoomSdk.addEventListener("onConnect", (event) => {
+            console.log("Connected");
+            connected = true;
+
+            if (preMeeting === true) {
+              console.log("Letting client know meeting instance exists.");
+              sendMessage("connected", "meeting");
+              preMeeting = false;
+            }
+          });
+
+          zoomSdk.connect();
+        }
+      }
+
+      async function sendMessage(msg, sender) {
+        console.log(
+          "Message sent from " + sender + " with data: " + JSON.stringify(msg)
+        );
+        await zoomSdk.postMessage({
+          payload: msg,
+        });
+      }
+
+      // Button handlers
+      async function handleStartRTMS() {
+        try {
+          addMessage("🔄 Starting RTMS...", "loading");
+          const res = await zoomSdk.callZoomApi("startRTMS");
+          addMessage(
+            "✅ RTMS started successfully: " + JSON.stringify(res),
+            "success"
+          );
+        } catch (error) {
+          addMessage("❌ RTMS start error: " + error.message, "error");
+        }
+      }
+
+      async function handleStopRTMS() {
+        try {
+          addMessage("🔄 Stopping RTMS...", "loading");
+          const res = await zoomSdk.callZoomApi("stopRTMS");
+          addMessage(
+            "✅ RTMS stopped successfully: " + JSON.stringify(res),
+            "success"
+          );
+        } catch (error) {
+          addMessage("❌ RTMS stop error: " + error.message, "error");
+        }
+      }
+
+      async function handleAuthorize() {
+        try {
+          addMessage("🔄 Authorizing...", "loading");
+          const res = await zoomSdk.authorize();
+          addMessage(
+            "✅ Authorization successful: " + JSON.stringify(res),
+            "success"
+          );
+
+          // Get user context after authorization
+          const userContext = await zoomSdk.getUserContext();
+          user = userContext;
+          updateUI();
+        } catch (error) {
+          addMessage("❌ Authorization error: " + error.message, "error");
+        }
+      }
+
+      // UI update functions
+      function updateUI() {
+        document.getElementById("welcome").textContent = user
+          ? `Hello ${user.first_name || ""} ${user.last_name || ""}!`
+          : "Hello Zoom Apps user!";
+
+        document.getElementById("userContextStatus").textContent =
+          userContextStatus || "Unknown";
+        document.getElementById("runningContext").textContent =
+          runningContext || "Configuring...";
+      }
+
+      function enableButtons() {
+        document.getElementById("startRTMS").disabled = false;
+        document.getElementById("stopRTMS").disabled = false;
+        document.getElementById("authorize").disabled = false;
+      }
+
+      function addMessage(message, type = "") {
+        const messagesDiv = document.getElementById("messages");
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${type}`;
+        messageDiv.textContent = message;
+        messagesDiv.appendChild(messageDiv);
+
+        // Auto-scroll to latest message
+        messageDiv.scrollIntoView({ behavior: "smooth" });
+      }
+
+      // Initialize when page loads
+      window.addEventListener("load", initializeApp);
+    </script>
+  </body>
+</html>
