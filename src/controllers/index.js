@@ -1,4 +1,5 @@
 import rtms from "@zoom/rtms";
+import crypto from "crypto";
 import { meetingService } from "../services/meeting.service.js";
 import { logger } from "../utils/logger.js";
 
