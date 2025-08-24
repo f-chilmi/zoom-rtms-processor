@@ -11,7 +11,6 @@ router
   .get("/authorize", authController.inClientAuthorize)
   .post("/onauthorized", authController.inClientOnAuthorized)
   .get("/home", addSecurityHeaders, authController.home)
-  // .use("/proxy", addSecurityHeaders, authController.proxy)
   .use("/proxy", staticController.serveZoomApp)
   .use("/sockjs-node", addSecurityHeaders, authController.proxy);
 

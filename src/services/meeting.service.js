@@ -14,8 +14,15 @@ class MeetingService {
     this.transcriptions = new Map();
     this.audioWriters = new Map();
     this.meetingStartTimes = new Map();
+    this.meetingContexts = new Map(); // Store meeting contexts including zoomUserId
     this.storageService = new StorageService();
     this.apiService = new ApiService();
+  }
+
+  // Store meeting context when meeting starts
+  setMeetingContext(streamId, context) {
+    this.meetingContexts.set(streamId, context);
+    logger.debug(`Stored meeting context for ${streamId}:`, context);
   }
 
   addTranscription(streamId, data, timestamp, metadata) {
@@ -89,6 +96,13 @@ class MeetingService {
     try {
       logger.info(`Processing meeting end for stream: ${streamId}`);
 
+      // Get meeting context (includes zoomUserId)
+      const meetingContext = this.meetingContexts.get(streamId);
+      if (!meetingContext || !meetingContext.zoomUserId) {
+        logger.error(`No meeting context or zoomUserId found for ${streamId}`);
+        throw new Error(`Missing meeting context for ${streamId}`);
+      }
+
       // Close audio writer
       const writer = this.audioWriters.get(streamId);
       if (writer) {
@@ -119,21 +133,23 @@ class MeetingService {
       // Upload files to storage
       const [audioUrl] = await Promise.all([
         this.storageService.uploadAudioFile(mp3Path, streamId),
-        // this.storageService.uploadTranscriptionFile(meetingSummary, streamId),
       ]);
 
-      // Notify backend
+      // Prepare meeting data with zoomUserId
       const meetingData = {
         streamId,
         meetingUuid,
+        zoomUserId: meetingContext.zoomUserId, // Include zoomUserId
         audioUrl,
         transcriptionResult: transcriptionData,
         duration: meetingSummary.duration,
         participants: meetingSummary.participants.length,
         participantsList: meetingSummary.participants,
         processedAt: new Date().toISOString(),
+        operatorId: meetingContext.operatorId || null, // Include if available
       };
 
+      // Notify backend
       await this.apiService.notifyMeetingProcessed(meetingData);
 
       // Cleanup
@@ -188,24 +204,25 @@ class MeetingService {
   }
 
   generateMeetingSummary(transcriptionData, streamId, meetingUuid) {
-    const participants = [...new Set(transcriptionData.map((t) => t.user))];
+    const participants = [...new Set(transcriptionData.map((t) => t.speaker))];
     const startTime =
-      transcriptionData.length > 0 ? transcriptionData[0].timestamp : null;
+      transcriptionData.length > 0 ? transcriptionData[0].start : 0;
     const endTime =
       transcriptionData.length > 0
-        ? transcriptionData[transcriptionData.length - 1].timestamp
-        : null;
+        ? transcriptionData[transcriptionData.length - 1].end
+        : 0;
 
-    // Calculate duration in seconds (timestamps are in microseconds)
-    const duration =
-      startTime && endTime ? Math.round((endTime - startTime) / 1000000) : 0;
+    // Calculate duration in seconds
+    const duration = Math.round(endTime - startTime);
 
     return {
       meetingId: streamId,
       meetingUuid,
-      startTime: startTime ? new Date(startTime / 1000).toISOString() : null,
-      endTime: endTime ? new Date(endTime / 1000).toISOString() : null,
-      duration,
+      startTime: startTime
+        ? new Date(Date.now() - (endTime - startTime) * 1000).toISOString()
+        : null,
+      endTime: new Date().toISOString(),
+      duration: Math.max(duration, 0),
       participants,
       transcription: transcriptionData,
       processedAt: new Date().toISOString(),
@@ -218,6 +235,7 @@ class MeetingService {
       // Clean up memory
       this.transcriptions.delete(streamId);
       this.meetingStartTimes.delete(streamId);
+      this.meetingContexts.delete(streamId); // Clean up meeting context
 
       // Clean up files
       const tempDir = path.join(process.cwd(), "temp");

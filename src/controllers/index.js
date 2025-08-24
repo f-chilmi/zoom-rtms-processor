@@ -100,6 +100,25 @@ async function handleMeetingStarted(streamId, payload) {
   }
 
   try {
+    // Extract zoomUserId from payload
+    // The payload should contain information about who started the meeting
+    const zoomUserId = extractZoomUserIdFromPayload(payload);
+
+    if (!zoomUserId) {
+      logger.error(`No zoomUserId found in meeting payload for ${streamId}`);
+      throw new Error("Missing zoomUserId in meeting payload");
+    }
+
+    // Store meeting context including zoomUserId
+    const meetingContext = {
+      zoomUserId,
+      operatorId: payload.operator_id || null,
+      meetingUuid: payload.meeting_uuid,
+      startTime: new Date().toISOString(),
+    };
+
+    meetingService.setMeetingContext(streamId, meetingContext);
+
     // Create new RTMS client
     const client = new rtms.Client();
     clients.set(streamId, client);
@@ -109,11 +128,46 @@ async function handleMeetingStarted(streamId, payload) {
 
     // Join the meeting
     await client.join(payload);
-    logger.info(`Successfully joined meeting: ${streamId}`);
+    logger.info(
+      `Successfully joined meeting: ${streamId} for user: ${zoomUserId}`
+    );
   } catch (error) {
     logger.error(`Error in handleMeetingStarted for ${streamId}:`, error);
     clients.delete(streamId);
   }
+}
+
+function extractZoomUserIdFromPayload(payload) {
+  // The exact structure depends on Zoom's webhook payload
+  // You might need to adjust this based on the actual payload structure
+  // Common places where user ID might be found:
+
+  // Option 1: Direct user_id field
+  if (payload.user_id) {
+    return payload.user_id;
+  }
+
+  // Option 2: In operator object
+  if (payload.operator && payload.operator.id) {
+    return payload.operator.id;
+  }
+
+  // Option 3: In host information
+  if (payload.host && payload.host.id) {
+    return payload.host.id;
+  }
+
+  // Option 4: In meeting object
+  if (payload.meeting && payload.meeting.host_id) {
+    return payload.meeting.host_id;
+  }
+
+  // Add more extraction logic based on your actual Zoom webhook payload
+  logger.warn(
+    "Could not extract zoomUserId from payload:",
+    JSON.stringify(payload, null, 2)
+  );
+  return null;
 }
 
 function setupClientHandlers(client, streamId) {

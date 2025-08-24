@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
+    <script src="https://appssdk.zoom.us/sdk.min.js"></script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Zoom RTMS App</title>
-    <script src="https://appssdk.zoom.us/sdk.js"></script>
+
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
@@ -117,6 +118,19 @@
 
       // Initialize the app
       async function initializeApp() {
+        console.log("Window location:", window.location.href);
+        console.log("User agent:", navigator.userAgent);
+        console.log(
+          "Available globals:",
+          Object.keys(window).filter(
+            (key) => key.includes("zoom") || key.includes("Zoom")
+          )
+        );
+        console.log("Waiting for Zoom SDK to load...", typeof zoomSDK, zoomSdk);
+        if (typeof zoomSdk === "undefined" && typeof zoomSDK === "undefined") {
+          setTimeout(initializeApp, 100); // Retry after 100ms
+          return;
+        }
         try {
           console.log("Initializing Zoom SDK...");
 
@@ -285,6 +299,14 @@
         messageDiv.scrollIntoView({ behavior: "smooth" });
       }
 
+      console.log("Window location:", window.location.href);
+      console.log("User agent:", navigator.userAgent);
+      console.log(
+        "Available globals:",
+        Object.keys(window).filter(
+          (key) => key.includes("zoom") || key.includes("Zoom")
+        )
+      );
       // Initialize when page loads
       window.addEventListener("load", initializeApp);
     </script>
